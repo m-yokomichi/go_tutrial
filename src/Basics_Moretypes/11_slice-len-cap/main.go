@@ -14,6 +14,7 @@ func main() {
 	s = s[:4]
 	printSlice(s)
 
+	// 0 , 1 が削ぎ落とされる
 	s = s[2:]
 	printSlice(s)
 
