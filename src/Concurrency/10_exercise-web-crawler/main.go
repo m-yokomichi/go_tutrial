@@ -2,22 +2,45 @@ package main
 
 import (
 	"fmt"
+	"sync"
+	"time"
 )
 
 type Fetcher interface {
 	Fetch(url string) (body string, urls []string, err error)
 }
 
+var fetched = struct {
+	urls map[string]bool
+	urlErrors map[string]error
+	sync.Mutex
+}{
+	urls : make(map[string]bool),
+	urlErrors : make(map[string]error),
+}
+
 func Crawl(url string, depth int, fetcher Fetcher) {
 
 	// TODO:並列化
 	// TODO:二度同じURLを読み込まない
-	crawl := func (url string, depth int, fetcher Fetcher) {
+	var crawl func(string, int)
+	crawl = func (url string, depth int) {
 		if depth <= 0 {
 			return
 		}
 
+		fetched.Lock()
+		if _, ok := fetched.urls[url]; ok {
+
+			fetched.Unlock()
+			return
+		}
+
+		fetched.urls[url] = true
+		fetched.Unlock()
+		
 		body, urls, err := fetcher.Fetch(url)
+		fetched.urlErrors[url] = err
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -25,10 +48,12 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 		fmt.Printf("found: %s %q\n", url, body)
 	
 		for _, u := range urls {
-			Crawl(u, depth-1, fetcher)
+			go crawl(u, depth-1)
 		}
 	} 
-	go crawl( url, depth, fetcher)
+	go crawl( url, depth)
+
+	time.Sleep(3 * time.Second)
 	
 	return
 }
